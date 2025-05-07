@@ -1,39 +1,50 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 """
-Log parsing
+Reads stdin line by line and computes metrics:
+- Total file size
+- Number of lines by status code
 """
 
 import sys
+import re
+from collections import defaultdict
 
-if __name__ == '__main__':
+total_size = 0
+status_counts = defaultdict(int)
+line_count = 0
 
-    filesize, count = 0, 0
-    codes = ["200", "301", "400", "401", "403", "404", "405", "500"]
-    stats = {k: 0 for k in codes}
+# Allowed status codes
+valid_codes = ['200', '301', '400', '401', '403', '404', '405', '500']
 
-    def print_stats(stats: dict, file_size: int) -> None:
-        print("File size: {:d}".format(filesize))
-        for k, v in sorted(stats.items()):
-            if v:
-                print("{}: {}".format(k, v))
+log_pattern = re.compile(
+    r'^\d{1,3}(\.\d{1,3}){3} - \[.*?\] "GET /projects/260 HTTP/1\.1" (\d{3}) (\d+)$'
+)
 
-    try:
-        for line in sys.stdin:
-            count += 1
-            data = line.split()
-            try:
-                status_code = data[-2]
-                if status_code in stats:
-                    stats[status_code] += 1
-            except BaseException:
-                pass
-            try:
-                filesize += int(data[-1])
-            except BaseException:
-                pass
-            if count % 10 == 0:
-                print_stats(stats, filesize)
-        print_stats(stats, filesize)
-    except KeyboardInterrupt:
-        print_stats(stats, filesize)
-        raise
+
+def print_stats():
+    """Print the current accumulated statistics"""
+    print(f"File size: {total_size}")
+    for code in sorted(status_counts):
+        if code in valid_codes:
+            print(f"{code}: {status_counts[code]}")
+
+
+try:
+    for line in sys.stdin:
+        line = line.strip()
+        match = log_pattern.match(line)
+        if match:
+            status_code = match.group(2)
+            file_size = int(match.group(3))
+            total_size += file_size
+            if status_code in valid_codes:
+                status_counts[status_code] += 1
+        line_count += 1
+        if line_count % 10 == 0:
+            print_stats()
+except KeyboardInterrupt:
+    print_stats()
+    raise
+else:
+    print_stats()
+
